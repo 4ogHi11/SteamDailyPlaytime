@@ -32,7 +32,8 @@ def get_steam_data():
 
     # 获取当前时间，转换为北京时间
     now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
-
+    all_response = requests.request("GET", all_url, params=params)
+    all_res = all_response.json().get("response").get("games")
     all_steam_df = pd.DataFrame(all_res)
 
     # 转换时间字段为北京时间
@@ -208,4 +209,5 @@ if __name__ == "__main__":
     merge_steam_data()
     get_playing_time()
     main()
+
 
