@@ -11,8 +11,11 @@ def get_steam_data():
     调用 GetOwnedGames 和 GetRecentlyPlayedGames 接口获取游戏时长数据
     将结果保存为 CSV 文件
     """
+
     all_url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1"
-    recently_url = "https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1"
+    recently_url = (
+        "https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1"
+    )
 
     key = os.environ.get("STEAM_KEY")
     steamid = os.environ.get("STEAM_ID")
@@ -28,26 +31,44 @@ def get_steam_data():
         "include_free_sub": True,
     }
 
-    all_response = requests.get(all_url, params=params)
+    # 获取所有游戏信息
+    all_response = requests.request("GET", all_url, params=params)
     all_res = all_response.json().get("response").get("games")
     all_steam_df = pd.DataFrame(all_res)
 
-    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+    # 获取当前时间，转换为北京时间
+    now_time = datetime.datetime.now(pytz.timezone("Asia/Shanghai"))
+
     all_steam_df["creation_time"] = now_time
 
-    all_steam_df["rtime_last_played"] = all_steam_df["rtime_last_played"].astype(int)
-    all_steam_df["playtime_disconnected"] = all_steam_df["playtime_disconnected"].astype(int)
-    all_steam_df["playtime_2weeks"] = all_steam_df["playtime_2weeks"].fillna(0).astype(int)
+    # 转换时间字段为北京时间
+    all_steam_df['rtime_last_played'] = pd.to_datetime(all_steam_df['rtime_last_played'], unit='s')
+    all_steam_df['rtime_last_played'] = all_steam_df['rtime_last_played'].dt.tz_localize('US/Pacific').dt.tz_convert('Asia/Shanghai')
+
+    all_steam_df['playtime_2weeks'] = (
+        all_steam_df["playtime_2weeks"].fillna(0).astype(int)
+    )
 
     os.makedirs("./data/steam_data", exist_ok=True)
-    all_steam_df.to_csv(f"./data/steam_data/steam_data_{now_time.strftime('%Y%m%d')}.csv", index=False)
+    all_steam_df.to_csv(
+        f"./data/steam_data/steam_data_{now_time.strftime('%Y%m%d')}.csv", index=False
+    )
 
-    recently_response = requests.get(recently_url, params=params)
+    # 获取两周内游戏信息
+    recently_response = requests.request("GET", recently_url, params=params)
     recently_res = recently_response.json().get("response").get("games")
     steam_df = pd.DataFrame(recently_res)
+
+    # 转换时间为北京时间
+    steam_df['created_time'] = pd.to_datetime(steam_df['created_time'], unit='s')
+    steam_df['created_time'] = steam_df['created_time'].dt.tz_localize('US/Pacific').dt.tz_convert('Asia/Shanghai')
+
     steam_df["created_time"] = now_time
     os.makedirs("./data/playtime_2week_data", exist_ok=True)
-    steam_df.to_csv(f"./data/playtime_2week_data/steam_playtime_2week_{now_time.strftime('%Y%m%d')}.csv", index=False)
+    steam_df.to_csv(
+        f"./data/playtime_2week_data/steam_playtime_2week_{now_time.strftime('%Y%m%d')}.csv",
+        index=False,
+    )
 
 
 def merge_steam_data():
@@ -110,8 +131,8 @@ def get_playing_time():
     merge_game_info.to_csv(f"./data/playing_time_data/playing_time_{today_date}.csv", index=False)
 
 
-NOTION_TOKEN = os.environ.get('NOTION_TOKEN')
-DATABASE_ID = os.environ.get('NOTION_DATABASE_ID')
+NOTION_TOKEN = os.environ.get("NOTION_KEY")
+DATABASE_ID = os.environ.get("NOTION_DATABASE_ID")
 DATA_DIR = "./data/playing_time_data"
 
 
@@ -138,24 +159,22 @@ def add_to_notion(data):
                         }
                     ]
                 },
-                "Playtime": {
-                    "rich_text": [
-                        {
-                            "text": {
-                                "content": str(row['playing_time'])
-                            }
-                        }
-                    ]
+                "Playtime": {  # 确保这里是 number 类型
+                    "number": row['playing_time']
                 },
                 "Playtime Date": {
                     "date": {
                         "start": str(row['playtime_date'])
                     }
                 },
-                "Created Time": {
-                    "date": {
-                        "start": str(row['creation_time'])
-                    }
+                "AppID": {  # 确保这里是正确的字段类型（rich_text 或 number）
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": str(row['appid'])
+                            }
+                        }
+                    ]
                 }
             }
         }
@@ -166,7 +185,6 @@ def add_to_notion(data):
             print(f"Successfully added: {row['name']}")
         else:
             print(f"Failed to add: {row['name']} - {response.status_code} - {response.text}")
-
 
 def get_playtime_data():
     all_files = [
