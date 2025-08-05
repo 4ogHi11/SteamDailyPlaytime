@@ -137,7 +137,16 @@ def add_to_notion(data):
                         }
                     ]
                 },
-                "Playtime": {  # 确保这里是 number 类型
+                "AppID": {
+                    "rich_text": [
+                         {
+                            "text": {
+                                "content": str(row['appid'])
+                            }
+                        }
+                    ]
+                },
+                "Playtime": {
                     "number": row['playing_time']
                 },
                 "Playtime Date": {
@@ -145,15 +154,11 @@ def add_to_notion(data):
                         "start": str(row['playtime_date'])  # 确保传入的是北京时间
                     }
                 },
-                "AppID": {  # 确保这里是正确的字段类型（rich_text 或 number）
-                    "rich_text": [
-                        {
-                            "text": {
-                                "content": str(row['appid'])
-                            }
-                        }
-                    ]
-                }
+                "Creation Time": {  # 新增 creation_time 字段
+                    "date": {
+                        "start": str(row['creation_time'])  # 这里使用创建时间
+                    }
+                },
             }
         }
 
@@ -163,6 +168,7 @@ def add_to_notion(data):
             print(f"Successfully added: {row['name']}")
         else:
             print(f"Failed to add: {row['name']} - {response.status_code} - {response.text}")
+
 
 def get_playtime_data():
     all_files = [
@@ -192,6 +198,7 @@ if __name__ == "__main__":
     merge_steam_data()
     get_playing_time()
     main()
+
 
 
 
