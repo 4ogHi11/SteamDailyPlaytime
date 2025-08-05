@@ -3,7 +3,7 @@ name: get_steam_playtime_data
 
 on:
   schedule:
-    # 每天北京时间早上8点运行（UTC时间0点）
+    # 每天北京时间0点运行
     - cron: '0 18 * * *'
   workflow_dispatch: # 允许手动触发
 
