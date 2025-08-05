@@ -171,10 +171,10 @@ def upload_to_notion():
                                 }
                             }
                         ]
-                    }，
+                    },
                     "游戏ID": {
                         "number": int(row["appid"]) if "appid" in row else 0
-                    }，
+                    },
                     "游戏时长(分钟)": {
                         "number": int(row["playing_time"]) if "playing_time" in row else 0
                     },
