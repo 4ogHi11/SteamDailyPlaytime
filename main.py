@@ -1,9 +1,8 @@
 import requests
 import pandas as pd
 import os
-import datetime
 import pytz
-from datetime import datetime, timedelta  # 确保导入timedelta
+from datetime import datetime, timedelta
 
 def get_steam_data():
     """
@@ -37,22 +36,25 @@ def get_steam_data():
     # 获取所有游戏信息
     all_response = requests.request("GET", all_url, params=params)
     all_res = all_response.json().get("response").get("games")
+    if all_res is None:
+        raise ValueError("Failed to get owned games data from Steam API")
     all_steam_df = pd.DataFrame(all_res)
 
     # 获取当前时间，由于 GitHub Actions 使用的是UTC 时间，因此需要转换为北京时间，后续所有时间相关内容均同
-    now_time = datetime.datetime.now(pytz.timezone("Asia/Shanghai"))
+    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
 
     all_steam_df["creation_time"] = now_time
 
     # 个人强迫症，避免数据转换过程中出现浮点数导致出现无意义的.0
-    all_steam_df["rtime_last_played"] = all_steam_df["rtime_last_played"].astype(int)
-    all_steam_df["playtime_disconnected"] = all_steam_df[
-        "playtime_disconnected"
-    ].astype(int)
+    if "rtime_last_played" in all_steam_df.columns:
+        all_steam_df["rtime_last_played"] = all_steam_df["rtime_last_played"].astype(int)
+    if "playtime_disconnected" in all_steam_df.columns:
+        all_steam_df["playtime_disconnected"] = all_steam_df["playtime_disconnected"].astype(int)
     # 此处由于该接口返回数据两周内游戏市场为 0 时会为空，因此需要将空值填充为 0，也避免转换失败
-    all_steam_df["playtime_2weeks"] = (
-        all_steam_df["playtime_2weeks"].fillna(0).astype(int)
-    )
+    if "playtime_2weeks" in all_steam_df.columns:
+        all_steam_df["playtime_2weeks"] = (
+            all_steam_df["playtime_2weeks"].fillna(0).astype(int)
+        )
     # 创建文件夹，其实只需要初次创建后即可删除
     os.makedirs("./data/steam_data", exist_ok=True)
     # 保存数据，文件名记录日期
@@ -63,7 +65,12 @@ def get_steam_data():
     # 获取两周内游戏信息
     recently_response = requests.request("GET", recently_url, params=params)
     recently_res = recently_response.json().get("response").get("games")
-    steam_df = pd.DataFrame(recently_res)
+    if recently_res is None:
+        print("Warning: No recently played games data from Steam API")
+        steam_df = pd.DataFrame()
+    else:
+        steam_df = pd.DataFrame(recently_res)
+    
     steam_df["created_time"] = now_time
     os.makedirs("./data/playtime_2week_data", exist_ok=True)
     steam_df.to_csv(
@@ -79,43 +86,46 @@ def merge_steam_data():
     """
 
     # 获取当天的日期，以获取准确的文件名
-    today_date = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime(
-        "%Y%m%d"
-    )
+    today_date = datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%Y%m%d")
+    
     # 从 CSV 文件中读取数据
     all_game_info = pd.read_csv(f"./data/steam_data/steam_data_{today_date}.csv")
-    recently_game_info = pd.read_csv(
-        f"./data/playtime_2week_data/steam_playtime_2week_{today_date}.csv"
-    )
+    
+    # 检查两周内游戏数据文件是否存在
+    recently_file = f"./data/playtime_2week_data/steam_playtime_2week_{today_date}.csv"
+    if not os.path.exists(recently_file):
+        print("Warning: Recently played games data file not found, skipping merge")
+        return
+        
+    recently_game_info = pd.read_csv(recently_file)
 
     # 获取不在 all_game_info 中的数据
-    not_in_all_game_info = recently_game_info[
-        ~recently_game_info["appid"].isin(all_game_info["appid"])
-    ]
+    not_in_all_game_info = recently_game_info[~recently_game_info["appid"].isin(all_game_info["appid"])]
+    
     # 使用两周内游戏数据补充数据
-    now_time = datetime.datetime.now(pytz.timezone("Asia/Shanghai"))
+    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
     for index, row in not_in_all_game_info.iterrows():
         new_row = {
             "appid": row["appid"],
             "name": row["name"],
-            "playtime_forever": row["playtime_forever"],
-            "playtime_windows_forever": row["playtime_windows_forever"],
-            "playtime_mac_forever": row["playtime_mac_forever"],
-            "playtime_linux_forever": row["playtime_linux_forever"],
-            "playtime_deck_forever": row["playtime_deck_forever"],
-            "playtime_2weeks": row["playtime_2weeks"],
+            "playtime_forever": row["playtime_forever"] if "playtime_forever" in row else 0,
+            "playtime_windows_forever": row["playtime_windows_forever"] if "playtime_windows_forever" in row else 0,
+            "playtime_mac_forever": row["playtime_mac_forever"] if "playtime_mac_forever" in row else 0,
+            "playtime_linux_forever": row["playtime_linux_forever"] if "playtime_linux_forever" in row else 0,
+            "playtime_deck_forever": row["playtime_deck_forever"] if "playtime_deck_forever" in row else 0,
+            "playtime_2weeks": row["playtime_2weeks"] if "playtime_2weeks" in row else 0,
             "creation_time": now_time,
         }
-        all_game_info = pd.concat(
-            [all_game_info, pd.DataFrame([new_row])], ignore_index=True
-        )
+        all_game_info = pd.concat([all_game_info, pd.DataFrame([new_row])], ignore_index=True)
+    
     # 此处合并数据后部分字段出现浮点数，因此转换为整数
-    all_game_info["rtime_last_played"] = (
-        all_game_info["rtime_last_played"].fillna(0).astype(int)
-    )
-    all_game_info["playtime_disconnected"] = (
-        all_game_info["playtime_disconnected"].fillna(0).astype(int)
-    )
+    if "rtime_last_played" in all_game_info.columns:
+        all_game_info["rtime_last_played"] = (
+            all_game_info["rtime_last_played"].fillna(0).astype(int)
+    if "playtime_disconnected" in all_game_info.columns:
+        all_game_info["playtime_disconnected"] = (
+            all_game_info["playtime_disconnected"].fillna(0).astype(int))
+
     # 保存数据
     all_game_info.to_csv(f"./data/steam_data/steam_data_{today_date}.csv", index=False)
 
@@ -126,19 +136,27 @@ def get_playing_time():
     """
 
     # 获取当天的日期，以获取准确的文件名
-    today_date = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime(
-        "%Y%m%d"
-    )
+    today_date = datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%Y%m%d")
     # 获取昨天的日期
-    昨天_date = (
-        datetime.datetime.now(pytz.timezone("Asia/Shanghai")) - datetime.timedelta(1)
+    yesterday_date = (
+        datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)
     ).strftime("%Y%m%d")
 
-    # 从 CSV 文件中读取数据
-    today_game_info = pd.read_csv(f"./data/steam_data/steam_data_{today_date}.csv")
-    昨天_game_info = pd.read_csv(
-        f"./data/steam_data/steam_data_{yesterday_date}.csv"
-    )
+    # 检查今天的数据文件是否存在
+    today_file = f"./data/steam_data/steam_data_{today_date}.csv"
+    if not os.path.exists(today_file):
+        raise FileNotFoundError(f"Today's data file not found: {today_file}")
+    
+    today_game_info = pd.read_csv(today_file)
+    
+    # 检查昨天的数据文件是否存在
+    yesterday_file = f"./data/steam_data/steam_data_{yesterday_date}.csv"
+    if not os.path.exists(yesterday_file):
+        print(f"Warning: Yesterday's data file not found: {yesterday_file}")
+        # 如果没有昨天的数据，创建一个空的DataFrame
+        yesterday_game_info = pd.DataFrame(columns=today_game_info.columns)
+    else:
+        yesterday_game_info = pd.read_csv(yesterday_file)
 
     # 计算最近一天的游戏时长
     # 针对每个 appid，计算当天游戏时长与昨天游戏时长的差值
@@ -150,33 +168,30 @@ def get_playing_time():
         how="left",
         suffixes=("_new", "_old"),
     )
+    
     # 计算游戏时长，需要加上 disconnected 的时长
     merge_game_info["playing_time"] = merge_game_info.apply(
-        lambda x: x["playtime_forever_new"] + x["playtime_disconnected_new"]
+        lambda x: x["playtime_forever_new"] + (x["playtime_disconnected_new"] if "playtime_disconnected_new" in x and not pd.isna(x["playtime_disconnected_new"]) else 0)
         if pd.isna(x["playtime_forever_old"])
         else int(
             x["playtime_forever_new"]
-            + x["playtime_disconnected_new"]
+            + (x["playtime_disconnected_new"] if "playtime_disconnected_new" in x and not pd.isna(x["playtime_disconnected_new"]) else 0)
             - x["playtime_forever_old"]
-            - x["playtime_disconnected_old"]
+            - (x["playtime_disconnected_old"] if "playtime_disconnected_old" in x and not pd.isna(x["playtime_disconnected_old"]) else 0)
         ),
         axis=1,
     )
 
-    # 仅保留一列游戏名称，删除多余的列
-    merge_game_info.drop("name_old", axis=1, inplace=True)
-    merge_game_info.rename(columns={"name_new": "name"}, inplace=True)
-
     # 仅保留非零游戏时长的数据
     merge_game_info = merge_game_info[merge_game_info["playing_time"] > 0]
     merge_game_info = merge_game_info[["appid", "name", "playing_time"]]
-    time = datetime.datetime.now(pytz.timezone("Asia/Shanghai"))
+    time = datetime.now(pytz.timezone("Asia/Shanghai"))
 
     # 调整字段顺序
     merge_game_info = merge_game_info[["appid", "name", "playing_time"]]
     # 记录数据日期，由于定时任务在凌晨执行，因此计算出来的游戏时长数据是昨天的
     merge_game_info["playtime_date"] = (
-        datetime.datetime.now(pytz.timezone("Asia/Shanghai")) - datetime.timedelta(1)
+        datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)
     ).date()
     merge_game_info["creation_time"] = time
 
@@ -185,6 +200,7 @@ def get_playing_time():
     merge_game_info.to_csv(
         f"./data/playing_time_data/playing_time_{today_date}.csv", index=False
     )
+
 def upload_to_notion():
     """
     将最近一天的游戏时长数据上传到Notion数据库
@@ -225,7 +241,7 @@ def upload_to_notion():
     for _, row in df.iterrows():
         # 构造页面属性
         page_properties = {
-            "parent": {"database_id": notion_database_id},
+            "parent": {"database_id": notion_database_id}，
             "properties": {
                 "游戏名称": {
                     "title": [
@@ -238,10 +254,10 @@ def upload_to_notion():
                 },
                 "游戏ID": {
                     "number": int(row["appid"])
-                },
+                }，
                 "游戏时长(分钟)": {
                     "number": int(row["playing_time"])
-                },
+                }，
                 "日期": {
                     "date": {
                         "start": row["playtime_date"]
@@ -257,16 +273,27 @@ def upload_to_notion():
             json=page_properties
         )
         
-        if response.status_code != 200:
-            print(f"上传失败: {response.status_code} - {response.text}")
-        else:
+        if response.status_code == 200:
             print(f"成功上传: {row['name']} - {row['playing_time']}分钟")
+        elif response.status_code == 429:
+            print("达到API速率限制，暂停5秒...")
+            time.sleep(5)
+            # 重试一次
+            response = requests.post(
+                "https://api.notion.com/v1/pages",
+                headers=headers,
+                json=page_properties
+            )
+            if response.status_code == 200:
+                print(f"重试成功: {row['name']} - {row['playing_time']}分钟")
+            else:
+                print(f"重试失败: {response.status_code} - {response.text}")
+        else:
+            print(f"上传失败: {response.status_code} - {response.text}")
 
-# 更新主函数
+# 主函数
 if __name__ == "__main__":
     get_steam_data()
     merge_steam_data()
     get_playing_time()
-    upload_to_notion()  # 添加Notion上传
-    
-    # ... 原有的图表生成代码保持不变 ...
+    upload_to_notion()
