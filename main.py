@@ -5,6 +5,7 @@ import pytz
 import time
 from datetime import datetime, timedelta
 
+
 def get_steam_data():
     """
     调用 GetOwnedGames 和 GetRecentlyPlayedGames 接口获取游戏时长数据
@@ -131,7 +132,6 @@ def upload_to_notion():
     将最近一天的游戏时长数据上传到Notion数据库
     """
     try:
-        # 获取昨天的日期（数据日期）
         data_date = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).strftime("%Y%m%d")
         csv_path = f"./data/playing_time_data/playing_time_{data_date}.csv"
 
@@ -171,10 +171,10 @@ def upload_to_notion():
                                 }
                             }
                         ]
-                    },
+                    }，
                     "游戏ID": {
                         "number": int(row["appid"]) if "appid" in row else 0
-                    },
+                    }，
                     "游戏时长(分钟)": {
                         "number": int(row["playing_time"]) if "playing_time" in row else 0
                     },
