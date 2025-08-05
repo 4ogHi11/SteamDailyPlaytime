@@ -1,0 +1,38 @@
+name: get_steam_playtime_data
+
+on:
+  # 定时执行，由于 GitHub Actions 使用 UTC 时间，因此此处设置为 18:00，表示在北京时间 02:00 执行
+  schedule:
+    - cron: "0 18 * * *"
+  # 允许手动触发，便于调试
+  workflow_dispatch:
+
+jobs:
+  get_steam_playtime_data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ./script/requirements.txt
+      - name: Install dependencies
+        run: pip install -r ./script/requirements.txt
+      - name: Run script
+        env:
+          STEAM_KEY: ${{ secrets.STEAM_KEY }}
+          STEAM_ID: ${{ vars.STEAM_ID }}
+        run: python ./script/get_playtime.py
+      - name: Commit changes
+        # 此处使用命令在 commit message 中添加时间信息
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update Steam Playtime Data `TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S'`"
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ github.ref }}
