@@ -138,12 +138,16 @@ def upload_to_notion():
         data_date = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).strftime("%Y%m%d")
         csv_path = f"./data/playing_time_data/playing_time_{data_date}.csv"
 
+        print(f"检查昨天的文件: {csv_path}")
+        
         # 如果昨日数据文件不存在，则使用 GetRecentlyPlayedGames 数据作为昨日数据
         if not os.path.exists(csv_path):
             print(f"昨天的数据文件不存在: {csv_path}, 使用最近两周的数据作为昨日数据上传")
             
             # 获取最近两周的游戏数据
             recently_file = f"./data/playtime_2week_data/steam_playtime_2week_{data_date}.csv"
+            print(f"检查最近两周的数据文件: {recently_file}")
+            
             if not os.path.exists(recently_file):
                 print("最近两周的数据文件也不存在，无法上传数据")
                 return
@@ -202,15 +206,23 @@ def upload_to_notion():
                     }
                 }
 
+                # 输出请求数据，帮助调试
+                print(f"准备上传的游戏数据: {page_properties}")
+
                 response = requests.post(
                     "https://api.notion.com/v1/pages",
                     headers=headers,
                     json=page_properties
                 )
 
+                # 输出响应状态码和内容，帮助调试
                 if response.status_code == 200:
                     print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
-                elif response.status_code == 429:
+                else:
+                    print(f"上传失败: {response.status_code} - {response.text}")
+                
+                # 如果有 API 限制，等待并重试
+                if response.status_code == 429:
                     print("达到API速率限制,暂停5秒...")
                     time.sleep(5)
                     response = requests.post(
@@ -222,8 +234,6 @@ def upload_to_notion():
                         print(f"重试成功: {game_name} - {int(row.get('playing_time', 0))}分钟")
                     else:
                         print(f"重试失败: {response.status_code} - {response.text}")
-                else:
-                    print(f"上传失败: {response.status_code} - {response.text}")
 
         else:
             # 如果昨天的数据文件存在，按常规方式上传
@@ -274,15 +284,23 @@ def upload_to_notion():
                     }
                 }
 
+                # 输出请求数据，帮助调试
+                print(f"准备上传的游戏数据: {page_properties}")
+
                 response = requests.post(
                     "https://api.notion.com/v1/pages",
                     headers=headers,
                     json=page_properties
                 )
 
+                # 输出响应状态码和内容，帮助调试
                 if response.status_code == 200:
                     print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
-                elif response.status_code == 429:
+                else:
+                    print(f"上传失败: {response.status_code} - {response.text}")
+                
+                # 如果有 API 限制，等待并重试
+                if response.status_code == 429:
                     print("达到API速率限制,暂停5秒...")
                     time.sleep(5)
                     response = requests.post(
@@ -294,12 +312,9 @@ def upload_to_notion():
                         print(f"重试成功: {game_name} - {int(row.get('playing_time', 0))}分钟")
                     else:
                         print(f"重试失败: {response.status_code} - {response.text}")
-                else:
-                    print(f"上传失败: {response.status_code} - {response.text}")
 
     except Exception as e:
         print(f"在 upload_to_notion 中发生错误: {str(e)}")
-
 
 # 主函数
 if __name__ == "__main__":
