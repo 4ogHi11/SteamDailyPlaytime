@@ -1,10 +1,9 @@
 import requests
 import pandas as pd
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import json
-
 
 def get_steam_data():
     """
@@ -31,15 +30,10 @@ def get_steam_data():
         "include_free_sub": True,
     }
 
-    # 获取所有游戏信息
-    all_response = requests.request("GET", all_url, params=params)
-    all_res = all_response.json().get("response").get("games")
-    all_steam_df = pd.DataFrame(all_res)
-
     # 获取当前时间，转换为北京时间
-    now_time = datetime.datetime.now(pytz.timezone("Asia/Shanghai"))
+    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
 
-    all_steam_df["creation_time"] = now_time
+    all_steam_df = pd.DataFrame(all_res)
 
     # 转换时间字段为北京时间
     all_steam_df['rtime_last_played'] = pd.to_datetime(all_steam_df['rtime_last_played'], unit='s')
@@ -214,3 +208,4 @@ if __name__ == "__main__":
     merge_steam_data()
     get_playing_time()
     main()
+
