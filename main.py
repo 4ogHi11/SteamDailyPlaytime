@@ -127,90 +127,179 @@ def merge_steam_data():
     except Exception as e:
         print(f"在 merge_steam_data 中发生错误: {str(e)}")
 
+
 def upload_to_notion():
     """
-    将最近一天的游戏时长数据上传到Notion数据库
+    将最近一天的游戏时长数据上传到Notion数据库。如果是首次运行且没有昨日数据，
+    则将最近两周的游戏数据作为昨日数据上传。
     """
     try:
+        # 获取昨天的日期（数据日期）
         data_date = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).strftime("%Y%m%d")
         csv_path = f"./data/playing_time_data/playing_time_{data_date}.csv"
 
+        # 如果昨日数据文件不存在，则使用 GetRecentlyPlayedGames 数据作为昨日数据
         if not os.path.exists(csv_path):
-            print(f"数据文件不存在: {csv_path}")
-            return
+            print(f"昨天的数据文件不存在: {csv_path}, 使用最近两周的数据作为昨日数据上传")
+            
+            # 获取最近两周的游戏数据
+            recently_file = f"./data/playtime_2week_data/steam_playtime_2week_{data_date}.csv"
+            if not os.path.exists(recently_file):
+                print("最近两周的数据文件也不存在，无法上传数据")
+                return
 
-        df = pd.read_csv(csv_path)
-        if df.empty:
-            print("没有需要上传的数据")
-            return
+            recently_game_info = pd.read_csv(recently_file)
+            
+            # 确保数据不为空
+            if recently_game_info.empty:
+                print("最近两周的数据为空，无法上传数据")
+                return
 
-        notion_key = os.environ.get("NOTION_KEY")
-        notion_database_id = os.environ.get("NOTION_DATABASE_ID")
+            # 格式化数据以符合上传到 Notion 的要求
+            recently_game_info["playtime_date"] = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).date()
+            recently_game_info["creation_time"] = datetime.now(pytz.timezone("Asia/Shanghai"))
+            
+            # 上传数据到 Notion
+            notion_key = os.environ.get("NOTION_KEY")
+            notion_database_id = os.environ.get("NOTION_DATABASE_ID")
 
-        if not notion_key or not notion_database_id:
-            raise ValueError("NOTION_KEY 或 NOTION_DATABASE_ID 未设置")
+            if not notion_key or not notion_database_id:
+                raise ValueError("NOTION_KEY 或 NOTION_DATABASE_ID 未设置")
 
-        headers = {
-            "Authorization": f"Bearer {notion_key}",
-            "Content-Type": "application/json",
-            "Notion-Version": "2022-06-28"
-        }
+            headers = {
+                "Authorization": f"Bearer {notion_key}",
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28"
+            }
 
-        df["playtime_date"] = pd.to_datetime(df["playtime_date"]).dt.strftime("%Y-%m-%d")
+            recently_game_info["playtime_date"] = pd.to_datetime(recently_game_info["playtime_date"]).dt.strftime("%Y-%m-%d")
 
-        for _, row in df.iterrows():
-            game_name = row["name"] if "name" in row and pd.notna(row["name"]) else "Unknown Game"
-            page_properties = {
-                "parent": {"database_id": notion_database_id},
-                "properties": {
-                    "游戏名称": {
-                        "title": [
-                            {
-                                "text": {
-                                    "content": game_name
+            for _, row in recently_game_info.iterrows():
+                game_name = row["name"] if "name" in row and pd.notna(row["name"]) else "Unknown Game"
+                page_properties = {
+                    "parent": {"database_id": notion_database_id},
+                    "properties": {
+                        "游戏名称": {
+                            "title": [
+                                {
+                                    "text": {
+                                        "content": game_name
+                                    }
                                 }
+                            ]
+                        },
+                        "游戏ID": {
+                            "number": int(row["appid"]) if "appid" in row else 0
+                        },
+                        "游戏时长(分钟)": {
+                            "number": int(row["playing_time"]) if "playing_time" in row else 0
+                        },
+                        "日期": {
+                            "date": {
+                                "start": row["playtime_date"] if "playtime_date" in row else "1970-01-01"
                             }
-                        ]
-                    },
-                    "游戏ID": {
-                        "number": int(row["appid"]) if "appid" in row else 0
-                    },
-                    "游戏时长(分钟)": {
-                        "number": int(row["playing_time"]) if "playing_time" in row else 0
-                    },
-                    "日期": {
-                        "date": {
-                            "start": row["playtime_date"] if "playtime_date" in row else "1970-01-01"
                         }
                     }
                 }
-            }
 
-            response = requests.post(
-                "https://api.notion.com/v1/pages",
-                headers=headers,
-                json=page_properties
-            )
-
-            if response.status_code == 200:
-                print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
-            elif response.status_code == 429:
-                print("达到API速率限制,暂停5秒...")
-                time.sleep(5)
                 response = requests.post(
                     "https://api.notion.com/v1/pages",
                     headers=headers,
                     json=page_properties
                 )
+
                 if response.status_code == 200:
-                    print(f"重试成功: {game_name} - {int(row.get('playing_time', 0))}分钟")
+                    print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
+                elif response.status_code == 429:
+                    print("达到API速率限制,暂停5秒...")
+                    time.sleep(5)
+                    response = requests.post(
+                        "https://api.notion.com/v1/pages",
+                        headers=headers,
+                        json=page_properties
+                    )
+                    if response.status_code == 200:
+                        print(f"重试成功: {game_name} - {int(row.get('playing_time', 0))}分钟")
+                    else:
+                        print(f"重试失败: {response.status_code} - {response.text}")
                 else:
-                    print(f"重试失败: {response.status_code} - {response.text}")
-            else:
-                print(f"上传失败: {response.status_code} - {response.text}")
+                    print(f"上传失败: {response.status_code} - {response.text}")
+
+        else:
+            # 如果昨天的数据文件存在，按常规方式上传
+            df = pd.read_csv(csv_path)
+            if df.empty:
+                print("没有需要上传的数据")
+                return
+
+            notion_key = os.environ.get("NOTION_KEY")
+            notion_database_id = os.environ.get("NOTION_DATABASE_ID")
+
+            if not notion_key or not notion_database_id:
+                raise ValueError("NOTION_KEY 或 NOTION_DATABASE_ID 未设置")
+
+            headers = {
+                "Authorization": f"Bearer {notion_key}",
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28"
+            }
+
+            df["playtime_date"] = pd.to_datetime(df["playtime_date"]).dt.strftime("%Y-%m-%d")
+
+            for _, row in df.iterrows():
+                game_name = row["name"] if "name" in row and pd.notna(row["name"]) else "Unknown Game"
+                page_properties = {
+                    "parent": {"database_id": notion_database_id},
+                    "properties": {
+                        "游戏名称": {
+                            "title": [
+                                {
+                                    "text": {
+                                        "content": game_name
+                                    }
+                                }
+                            ]
+                        },
+                        "游戏ID": {
+                            "number": int(row["appid"]) if "appid" in row else 0
+                        },
+                        "游戏时长(分钟)": {
+                            "number": int(row["playing_time"]) if "playing_time" in row else 0
+                        },
+                        "日期": {
+                            "date": {
+                                "start": row["playtime_date"] if "playtime_date" in row else "1970-01-01"
+                            }
+                        }
+                    }
+                }
+
+                response = requests.post(
+                    "https://api.notion.com/v1/pages",
+                    headers=headers,
+                    json=page_properties
+                )
+
+                if response.status_code == 200:
+                    print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
+                elif response.status_code == 429:
+                    print("达到API速率限制,暂停5秒...")
+                    time.sleep(5)
+                    response = requests.post(
+                        "https://api.notion.com/v1/pages",
+                        headers=headers,
+                        json=page_properties
+                    )
+                    if response.status_code == 200:
+                        print(f"重试成功: {game_name} - {int(row.get('playing_time', 0))}分钟")
+                    else:
+                        print(f"重试失败: {response.status_code} - {response.text}")
+                else:
+                    print(f"上传失败: {response.status_code} - {response.text}")
 
     except Exception as e:
         print(f"在 upload_to_notion 中发生错误: {str(e)}")
+
 
 # 主函数
 if __name__ == "__main__":
