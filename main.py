@@ -125,8 +125,6 @@ def notion_headers():
 def add_to_notion(data):
     url = f"https://api.notion.com/v1/pages"
     for _, row in data.iterrows():
-        # 确保 'playtime_date' 以 UTC+8 存储
-        merge_game_info["playtime_date"] = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).date()
         notion_payload = {
             "parent": { "database_id": DATABASE_ID },
             "properties": {
@@ -194,6 +192,7 @@ if __name__ == "__main__":
     merge_steam_data()
     get_playing_time()
     main()
+
 
 
 
