@@ -40,7 +40,7 @@ def get_steam_data():
             raise ValueError("Failed to get owned games data from Steam API")
         all_steam_df = pd.DataFrame(all_res)
 
-        now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+        现在_time = datetime.now(pytz.timezone("Asia/Shanghai"))
         all_steam_df["creation_time"] = now_time
 
         if "rtime_last_played" in all_steam_df.columns:
