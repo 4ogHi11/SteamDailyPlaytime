@@ -32,7 +32,7 @@ def get_steam_data():
     all_res = all_response.json().get("response").get("games")
     all_steam_df = pd.DataFrame(all_res)
 
-    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+    现在_time = datetime.now(pytz.timezone("Asia/Shanghai"))
     all_steam_df["creation_time"] = now_time
 
     all_steam_df["rtime_last_played"] = all_steam_df["rtime_last_played"].astype(int)
@@ -59,7 +59,7 @@ def merge_steam_data():
     recently_game_info = pd.read_csv(f"./data/playtime_2week_data/steam_playtime_2week_{today_date}.csv")
 
     not_in_all_game_info = recently_game_info[~recently_game_info["appid"].isin(all_game_info["appid"])]
-    now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+    现在_time = datetime.now(pytz.timezone("Asia/Shanghai"))
 
     for _, row in not_in_all_game_info.iterrows():
         new_row = {
@@ -122,7 +122,6 @@ def notion_headers():
         "Notion-Version": "2021-05-13"
     }
 
-
 def add_to_notion(data):
     url = f"https://api.notion.com/v1/pages"
     for _, row in data.iterrows():
@@ -138,24 +137,22 @@ def add_to_notion(data):
                         }
                     ]
                 },
-                "Playtime": {
-                    "rich_text": [
-                        {
-                            "text": {
-                                "content": str(row['playing_time'])
-                            }
-                        }
-                    ]
+                "Playtime": {  # 改为 number 类型
+                    "number": row['playing_time']
                 },
                 "Playtime Date": {
                     "date": {
                         "start": str(row['playtime_date'])
                     }
                 },
-                "Created Time": {
-                    "date": {
-                        "start": str(row['creation_time'])
-                    }
+                "AppID": {  # 新增 appid 字段
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": str(row['appid'])
+                            }
+                        }
+                    ]
                 }
             }
         }
@@ -165,8 +162,7 @@ def add_to_notion(data):
         if response.status_code == 200:
             print(f"Successfully added: {row['name']}")
         else:
-            print(f"Failed to add: {row['name']} - {response.text}")
-
+            print(f"Failed to add: {row['name']} - {response.status_code} - {response.text}")
 
 def get_playtime_data():
     all_files = [
@@ -196,3 +192,4 @@ if __name__ == "__main__":
     merge_steam_data()
     get_playing_time()
     main()
+
