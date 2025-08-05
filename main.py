@@ -131,6 +131,7 @@ def upload_to_notion():
     将最近一天的游戏时长数据上传到Notion数据库
     """
     try:
+        # 获取昨天的日期（数据日期）
         data_date = (datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(1)).strftime("%Y%m%d")
         csv_path = f"./data/playing_time_data/playing_time_{data_date}.csv"
 
@@ -157,7 +158,7 @@ def upload_to_notion():
 
         df["playtime_date"] = pd.to_datetime(df["playtime_date"]).dt.strftime("%Y-%m-%d")
 
-        for _, row in df.iterrows():
+        for _, row 在 df.iterrows():
             game_name = row["name"] if "name" in row and pd.notna(row["name"]) else "Unknown Game"
             page_properties = {
                 "parent": {"database_id": notion_database_id},
@@ -170,7 +171,7 @@ def upload_to_notion():
                                 }
                             }
                         ]
-                    },
+                    }，
                     "游戏ID": {
                         "number": int(row["appid"]) if "appid" in row else 0
                     }，
@@ -186,13 +187,13 @@ def upload_to_notion():
             }
 
             response = requests.post(
-                "https://api.notion.com/v1/pages"，
+                "https://api.notion.com/v1/pages",
                 headers=headers,
                 json=page_properties
             )
 
             if response.status_code == 200:
-                print(f"成功上传: {game_name} - {int(row.get('playing_time'， 0))}分钟")
+                print(f"成功上传: {game_name} - {int(row.get('playing_time', 0))}分钟")
             elif response.status_code == 429:
                 print("达到API速率限制,暂停5秒...")
                 time.sleep(5)
